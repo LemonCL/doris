@@ -1652,6 +1652,9 @@ public class StmtExecutor {
             Status internalErrorSt = new Status(TStatusCode.INTERNAL_ERROR,
                     "cancel fragment query_id:{} cause {}",
                     DebugUtil.printId(context.queryId()), e.getMessage());
+            if (e.getMessage().contains("query timeout")) {
+                internalErrorSt.updateErrorCode(TStatusCode.TIMEOUT);
+            }
             LOG.warn(internalErrorSt.getErrorMsg());
             coordBase.cancel(internalErrorSt);
             throw e;

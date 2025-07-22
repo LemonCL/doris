@@ -1018,7 +1018,11 @@ public class Coordinator implements CoordInterface {
                 if (exception != null && errMsg == null) {
                     errMsg = operation + " failed. " + exception.getMessage();
                 }
-                queryStatus.updateStatus(TStatusCode.INTERNAL_ERROR, errMsg);
+                if (code == TStatusCode.TIMEOUT) {
+                    queryStatus.updateStatus(TStatusCode.TIMEOUT, errMsg);
+                } else {
+                    queryStatus.updateStatus(TStatusCode.INTERNAL_ERROR, errMsg);
+                }
                 cancelInternal(queryStatus);
                 switch (code) {
                     case TIMEOUT:

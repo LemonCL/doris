@@ -646,6 +646,10 @@ void PInternalService::cancel_plan_fragment(google::protobuf::RpcController* /*c
             // to cancel status here.
             if (request->cancel_reason() == PPlanFragmentCancelReason::LIMIT_REACH) {
                 actual_cancel_status = Status::Error<ErrorCode::LIMIT_REACH>("limit reach");
+            } else if (request->has_cancel_reason() == PPlanFragmentCancelReason::TIMEOUT) {
+                actual_cancel_status = Status::Error<ErrorCode::TIMEOUT>(
+                        "cancelled by timeout, reason: {}", PPlanFragmentCancelReason_Name(
+                                request->cancel_reason()));
             } else {
                 // Use cancel reason as error message
                 actual_cancel_status = Status::InternalError(

@@ -100,6 +100,9 @@ DEFINE_GAUGE_METRIC_PROTOTYPE_2ARG(timeout_canceled_fragment_count, MetricUnit::
 bvar::LatencyRecorder g_fragmentmgr_prepare_latency("doris_FragmentMgr", "prepare");
 
 bvar::Adder<uint64_t> g_fragment_executing_count("fragment_executing_count");
+
+bvar::Adder<uint64_t> g_timeout_canceled_fragment_count("timeout_canceled_fragment_count");
+
 bvar::Status<uint64_t> g_fragment_last_active_time(
         "fragment_last_active_time", duration_cast<std::chrono::milliseconds>(
                                              std::chrono::system_clock::now().time_since_epoch())
@@ -882,6 +885,7 @@ Status FragmentMgr::exec_plan_fragment(const TPipelineFragmentParams& params,
     return Status::OK();
 }
 
+// fe->be 取消的调用
 void FragmentMgr::cancel_query(const TUniqueId query_id, const Status reason) {
     std::shared_ptr<QueryContext> query_ctx = nullptr;
     {
@@ -893,6 +897,13 @@ void FragmentMgr::cancel_query(const TUniqueId query_id, const Status reason) {
             return;
         }
     }
+
+    // cancel_query 有两部分发起者，
+    if (reason.is<ErrorCode::TIMEOUT>()) {
+        g_timeout_canceled_fragment_count << 1;
+        LOG(WARNING) << "Query " << print_id(query_id) << " it is cancel by be";
+    }
+    
     query_ctx->cancel(reason);
     _query_ctx_map.erase(query_id);
     LOG(INFO) << "Query " << print_id(query_id)

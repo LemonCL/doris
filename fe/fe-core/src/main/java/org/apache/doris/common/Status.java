@@ -83,6 +83,10 @@ public class Status {
         this.errorMsg = errorMessage;
     }
 
+    public void updateErrorCode(TStatusCode code) {
+        this.errorCode = code;
+    }
+
     public boolean ok() {
         return this.errorCode == TStatusCode.OK;
     }
