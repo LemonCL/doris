@@ -230,6 +230,17 @@ public class BinlogManager {
         addBinlog(dbId, tableIds, commitSeq, timestamp, type, data, false, createTableRecord);
     }
 
+    public void addCreateDatabaseRecord(CreateDatabaseRecord createDatabaseRecord) {
+        long dbId = createDatabaseRecord.getDbId();
+        List<Long> tableIds = Lists.newArrayList();
+        long commitSeq = createDatabaseRecord.getCommitSeq();
+        long timestamp = System.currentTimeMillis();
+        TBinlogType type = TBinlogType.CREATE_DATABASE;
+        String data = createDatabaseRecord.toJson();
+
+        addBinlog(dbId, tableIds, commitSeq, timestamp, type, data, false, createDatabaseRecord);
+    }
+
     public void addDropPartitionRecord(DropPartitionInfo dropPartitionInfo, long commitSeq) {
         long dbId = dropPartitionInfo.getDbId();
         List<Long> tableIds = Lists.newArrayList();
@@ -239,6 +250,17 @@ public class BinlogManager {
         String data = dropPartitionInfo.toJson();
 
         addBinlog(dbId, tableIds, commitSeq, timestamp, type, data, false, dropPartitionInfo);
+    }
+
+    public void addDropDatabaseRecord(DropDatabaseRecord record) {
+        long dbId = record.getDbId();
+        List<Long> tableIds = Lists.newArrayList();
+        long commitSeq = record.getCommitSeq();
+        long timestamp = System.currentTimeMillis();
+        TBinlogType type = TBinlogType.DROP_DATABASE;
+        String data = record.toJson();
+
+        addBinlog(dbId, tableIds, commitSeq, timestamp, type, data, false, record);
     }
 
     public void addDropTableRecord(DropTableRecord record) {

@@ -25,7 +25,9 @@ import org.apache.doris.backup.BackupJob;
 import org.apache.doris.backup.Repository;
 import org.apache.doris.backup.RestoreJob;
 import org.apache.doris.binlog.AddPartitionRecord;
+import org.apache.doris.binlog.CreateDatabaseRecord;
 import org.apache.doris.binlog.CreateTableRecord;
+import org.apache.doris.binlog.DropDatabaseRecord;
 import org.apache.doris.binlog.DropTableRecord;
 import org.apache.doris.binlog.UpsertRecord;
 import org.apache.doris.blockrule.SqlBlockRule;
@@ -191,12 +193,18 @@ public class EditLog {
                 }
                 case OperationType.OP_CREATE_DB: {
                     Database db = (Database) journal.getData();
+                    LOG.info("Begin to unprotect create db = " + db.getName());
+                    CreateDatabaseRecord record = new CreateDatabaseRecord(logId, db);
                     env.replayCreateDb(db);
+                    env.getBinlogManager().addCreateDatabaseRecord(record);
                     break;
                 }
                 case OperationType.OP_DROP_DB: {
                     DropDbInfo dropDbInfo = (DropDbInfo) journal.getData();
+                    LOG.info("Begin to unprotect drop db = " + dropDbInfo.getDbName());
+                    DropDatabaseRecord record = new DropDatabaseRecord(logId, dropDbInfo);
                     env.replayDropDb(dropDbInfo.getDbName(), dropDbInfo.isForceDrop(), dropDbInfo.getRecycleTime());
+                    env.getBinlogManager().addDropDatabaseRecord(record);
                     break;
                 }
                 case OperationType.OP_ALTER_DB: {
@@ -1408,11 +1416,15 @@ public class EditLog {
     }
 
     public void logCreateDb(Database db) {
-        logEdit(OperationType.OP_CREATE_DB, db);
+        long logId = logEdit(OperationType.OP_CREATE_DB, db);
+        CreateDatabaseRecord record = new CreateDatabaseRecord(logId, db);
+        Env.getCurrentEnv().getBinlogManager().addCreateDatabaseRecord(record);
     }
 
     public void logDropDb(DropDbInfo dropDbInfo) {
-        logEdit(OperationType.OP_DROP_DB, dropDbInfo);
+        long logId = logEdit(OperationType.OP_DROP_DB, dropDbInfo);
+        DropDatabaseRecord record = new DropDatabaseRecord(logId, dropDbInfo);
+        Env.getCurrentEnv().getBinlogManager().addDropDatabaseRecord(record);
     }
 
     public void logEraseDb(long dbId) {

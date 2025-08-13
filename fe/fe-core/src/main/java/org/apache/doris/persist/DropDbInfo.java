@@ -36,6 +36,8 @@ public class DropDbInfo implements Writable, GsonPostProcessable {
     private boolean forceDrop = false;
     @SerializedName(value = "recycleTime")
     private long recycleTime = 0;
+    @SerializedName(value = "dbId")
+    private long dbId = 0;
 
     public DropDbInfo() {
         this("", false, 0);
@@ -57,6 +59,14 @@ public class DropDbInfo implements Writable, GsonPostProcessable {
 
     public Long getRecycleTime() {
         return  recycleTime;
+    }
+    
+    public long getDbId() {
+        return dbId;
+    }
+    
+    public void setDbId(long dbId) {
+        this.dbId = dbId;
     }
 
     @Deprecated
@@ -88,7 +98,8 @@ public class DropDbInfo implements Writable, GsonPostProcessable {
 
         return (dbName.equals(info.getDbName()))
             && (forceDrop == info.isForceDrop())
-            && (recycleTime == info.getRecycleTime());
+            && (recycleTime == info.getRecycleTime())
+            && (dbId == info.getDbId());
     }
 
     @Override

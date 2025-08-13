@@ -569,6 +569,7 @@ public class InternalCatalog implements CatalogIf<Database> {
             idToDb.remove(db.getId());
             fullNameToDb.remove(db.getFullName());
             DropDbInfo info = new DropDbInfo(dbName, stmt.isForceDrop(), recycleTime);
+            info.setDbId(db.getId());
             Env.getCurrentEnv().getEditLog().logDropDb(info);
             Env.getCurrentEnv().getQueryStats().clear(Env.getCurrentEnv().getCurrentCatalog().getId(), db.getId());
         } finally {
