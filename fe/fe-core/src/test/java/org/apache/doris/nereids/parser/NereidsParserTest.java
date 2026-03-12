@@ -1530,4 +1530,92 @@ public class NereidsParserTest extends ParserTestBase {
         String sql = "SELECT t.* FROM LATERAL unnest([1,2], ['hi','hello']) WITH ORDINALITY AS t(c1,c2);";
         parsePlan(sql).matches(logicalGenerate().when(plan -> plan.getGenerators().get(0) instanceof Unnest));
     }
+
+    @Test
+    public void testLimitOrderByValidation() {
+        NereidsParser nereidsParser = new NereidsParser();
+
+        // Test 1: Basic error case - LIMIT before ORDER BY (should fail)
+        parsePlan("SELECT * FROM test_table LIMIT 3 ORDER BY score DESC")
+                .assertThrowsExactly(ParseException.class)
+                .assertMessageContains("ORDER BY must come before LIMIT");
+
+        // Test 2: Error with OFFSET - LIMIT OFFSET before ORDER BY (should fail)
+        parsePlan("SELECT * FROM test_table LIMIT 10 OFFSET 5 ORDER BY score DESC")
+                .assertThrowsExactly(ParseException.class)
+                .assertMessageContains("ORDER BY must come before LIMIT");
+
+        // Test 3: Error with multiple ORDER BY columns (should fail)
+        parsePlan("SELECT * FROM test_table LIMIT 10 ORDER BY a, b DESC")
+                .assertThrowsExactly(ParseException.class)
+                .assertMessageContains("ORDER BY must come before LIMIT");
+
+        // Test 4: Error with WHERE clause (should fail)
+        parsePlan("SELECT * FROM test_table WHERE id > 0 LIMIT 10 ORDER BY score")
+                .assertThrowsExactly(ParseException.class)
+                .assertMessageContains("ORDER BY must come before LIMIT");
+
+        // Test 5: Error with GROUP BY clause (should fail)
+        parsePlan("SELECT id, count(*) FROM test_table GROUP BY id LIMIT 5 ORDER BY count(*)")
+                .assertThrowsExactly(ParseException.class)
+                .assertMessageContains("ORDER BY must come before LIMIT");
+
+        // Test 6: Correct syntax - ORDER BY before LIMIT (should succeed)
+        LogicalPlan plan1 = nereidsParser.parseSingle("SELECT * FROM test_table ORDER BY score DESC LIMIT 3");
+        Assertions.assertNotNull(plan1);
+
+        // Test 7: Correct syntax with OFFSET (should succeed)
+        LogicalPlan plan2 = nereidsParser.parseSingle("SELECT * FROM test_table ORDER BY score DESC LIMIT 10 OFFSET 5");
+        Assertions.assertNotNull(plan2);
+
+        // Test 8: Correct syntax with multiple ORDER BY columns (should succeed)
+        LogicalPlan plan3 = nereidsParser.parseSingle("SELECT * FROM test_table ORDER BY a, b DESC LIMIT 10");
+        Assertions.assertNotNull(plan3);
+
+        // Test 9: Valid subquery scenario - LIMIT in subquery, ORDER BY in outer query (should succeed)
+        LogicalPlan plan4 = nereidsParser.parseSingle(
+                "SELECT * FROM (SELECT * FROM test_table LIMIT 10) subq ORDER BY score DESC");
+        Assertions.assertNotNull(plan4);
+
+        // Test 10: Valid CTE scenario - LIMIT in CTE, ORDER BY in main query (should succeed)
+        LogicalPlan plan5 = nereidsParser.parseSingle(
+                "WITH cte AS (SELECT * FROM test_table LIMIT 10) SELECT * FROM cte ORDER BY score DESC");
+        Assertions.assertNotNull(plan5);
+
+        // Test 11: Valid UNION scenario - LIMIT in one branch, ORDER BY at top level (should succeed)
+        LogicalPlan plan6 = nereidsParser.parseSingle(
+                "(SELECT * FROM t1 LIMIT 5) UNION ALL (SELECT * FROM t2) ORDER BY a");
+        Assertions.assertNotNull(plan6);
+
+        // Test 12: Correct syntax with WHERE clause (should succeed)
+        LogicalPlan plan7 = nereidsParser.parseSingle(
+                "SELECT * FROM test_table WHERE id > 0 ORDER BY score LIMIT 10");
+        Assertions.assertNotNull(plan7);
+
+        // Test 13: Correct syntax with GROUP BY clause (should succeed)
+        LogicalPlan plan8 = nereidsParser.parseSingle(
+                "SELECT id, count(*) FROM test_table GROUP BY id ORDER BY count(*) LIMIT 5");
+        Assertions.assertNotNull(plan8);
+
+        // Test 14: Error with JOIN (should fail)
+        parsePlan("SELECT * FROM t1 JOIN t2 ON t1.id = t2.id LIMIT 10 ORDER BY t1.score")
+                .assertThrowsExactly(ParseException.class)
+                .assertMessageContains("ORDER BY must come before LIMIT");
+
+        // Test 15: Correct syntax with JOIN (should succeed)
+        LogicalPlan plan9 = nereidsParser.parseSingle(
+                "SELECT * FROM t1 JOIN t2 ON t1.id = t2.id ORDER BY t1.score LIMIT 10");
+        Assertions.assertNotNull(plan9);
+
+        // Test 16: Valid nested subquery - multiple levels (should succeed)
+        LogicalPlan plan10 = nereidsParser.parseSingle(
+                "SELECT * FROM (SELECT * FROM (SELECT * FROM test_table LIMIT 5) s1 LIMIT 3) s2 ORDER BY a");
+        Assertions.assertNotNull(plan10);
+
+        // Test 17: Error with aggregate function in ORDER BY (should fail)
+        parsePlan("SELECT id, sum(value) FROM test_table GROUP BY id LIMIT 5 ORDER BY sum(value)")
+                .assertThrowsExactly(ParseException.class)
+                .assertMessageContains("ORDER BY must come before LIMIT");
+    }
 }
+

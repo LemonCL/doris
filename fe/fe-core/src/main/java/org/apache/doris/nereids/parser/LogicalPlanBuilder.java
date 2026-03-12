@@ -4369,6 +4369,37 @@ public class LogicalPlanBuilder extends DorisParserBaseVisitor<Object> {
         }
         Optional<SortClauseContext> sortClauseContext = Optional.ofNullable(ctx.sortClause());
         Optional<LimitClauseContext> limitClauseContext = Optional.ofNullable(ctx.limitClause());
+
+        // Check if LIMIT appears before ORDER BY (invalid SQL syntax)
+        if (sortClauseContext.isPresent() && limitClauseContext.isPresent()) {
+            int sortStart = sortClauseContext.get().getStart().getStartIndex();
+            int limitStart = limitClauseContext.get().getStart().getStartIndex();
+            if (limitStart < sortStart) {
+                throw new ParseException(
+                    "Syntax error: ORDER BY must come before LIMIT. "
+                    + "Please rewrite your query as: ORDER BY ... LIMIT ...",
+                    ctx);
+            }
+        }
+
+        // Check for "split across two calls" scenario: ORDER BY appearing after LIMIT
+        // This catches cases like "SELECT * FROM t LIMIT 10 ORDER BY a"
+        // where LIMIT is processed in first call and ORDER BY in second call
+        if (sortClauseContext.isPresent() && inputPlan instanceof LogicalLimit) {
+            LogicalLimit<?> limitPlan = (LogicalLimit<?>) inputPlan;
+            Plan child = limitPlan.child();
+
+            // Only reject if LIMIT and ORDER BY are in the same query level
+            // If child is LogicalSubQueryAlias, the LIMIT comes from a subquery (different level)
+            // e.g., "SELECT * FROM (SELECT * FROM t LIMIT 10) subq ORDER BY a" is valid
+            if (!(child instanceof LogicalSubQueryAlias)) {
+                throw new ParseException(
+                    "Syntax error: ORDER BY must come before LIMIT. "
+                    + "Please rewrite your query as: ORDER BY ... LIMIT ...",
+                    ctx);
+            }
+        }
+
         LogicalPlan sort = withSort(inputPlan, sortClauseContext);
         return withLimit(sort, limitClauseContext);
     }
