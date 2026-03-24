@@ -17,6 +17,8 @@
 
 #include "meta-service/meta_service_schema.h"
 
+#include "meta-store/codec.h"
+
 #include <fmt/format.h>
 #include <gen_cpp/cloud.pb.h>
 #include <gen_cpp/olap_file.pb.h>
@@ -153,6 +155,39 @@ void put_versioned_schema_kv(MetaServiceCode& code, std::string& msg, Transactio
     if (!document_put(txn, schema_key, std::move(tablet_schema))) {
         code = MetaServiceCode::PROTOBUF_SERIALIZE_ERR;
         msg = fmt::format("failed to serialize versioned tablet schema, key={}", hex(schema_key));
+    }
+}
+
+void put_schema_kv_on_restore(MetaServiceCode& code, std::string& msg, Transaction* txn,
+                              std::string_view schema_key,
+                              const doris::TabletSchemaCloudPB& schema) {
+    bool need_put = false;
+    ValueBuf val_buf;
+    TxnErrorCode err = cloud::blob_get(txn, schema_key, &val_buf);
+    if (err == TxnErrorCode::TXN_KEY_NOT_FOUND) {
+        need_put = true;
+    } else if (err == TxnErrorCode::TXN_OK) {
+        // Overwrite if existing schema is corrupted or has bad unique_id from create_tablet
+        doris::TabletSchemaCloudPB saved_schema;
+        need_put = !parse_schema_value(val_buf, &saved_schema) ||
+                   (saved_schema.column_size() > 0 &&
+                    saved_schema.column(0).unique_id() == -1);
+    } else {
+        code = cast_as<ErrCategory::READ>(err);
+        msg = fmt::format("failed to get schema during restore, err={}", err);
+        return;
+    }
+    if (need_put) {
+        std::string schema_key_end(schema_key);
+        encode_int64(INT64_MAX, &schema_key_end);
+        txn->remove(schema_key, schema_key_end);
+        uint8_t ver = config::meta_schema_value_version;
+        if (ver > 0) {
+            cloud::blob_put(txn, schema_key, schema, ver);
+        } else {
+            txn->put(schema_key, schema.SerializeAsString());
+        }
+        LOG(INFO) << "put schema during restore, key=" << hex(schema_key);
     }
 }
 

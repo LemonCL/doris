@@ -30,6 +30,12 @@ void put_schema_kv(MetaServiceCode& code, std::string& msg, Transaction* txn,
 void put_versioned_schema_kv(MetaServiceCode& code, std::string& msg, Transaction* txn,
                              std::string_view schema_key, const doris::TabletSchemaCloudPB& schema);
 
+// Put schema during restore. Only overwrite if existing schema has broken
+// unique_id=-1 (from create_tablet) or doesn't exist yet.
+void put_schema_kv_on_restore(MetaServiceCode& code, std::string& msg, Transaction* txn,
+                              std::string_view schema_key,
+                              const doris::TabletSchemaCloudPB& schema);
+
 // Return true if parse success
 [[nodiscard]] bool parse_schema_value(const ValueBuf& buf, doris::TabletSchemaCloudPB* schema);
 
